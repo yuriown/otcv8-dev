@@ -448,13 +448,15 @@ void DrawQueueItemOutfitWithShader::draw()
     if (!m_texture) return;
     PainterShaderProgramPtr shader = g_shaders.getShader(m_shader);
     if (!shader) return DrawQueueItemTexturedRect::draw();
-    bool useFramebuffer = m_dest.size() != m_src.size();
 
-    if (useFramebuffer) {
-        g_framebuffers.getTemporaryFrameBuffer()->resize(m_src.size());
-        g_framebuffers.getTemporaryFrameBuffer()->bind();
-        g_painter->clear(Color::alpha);
-    }
+    // Render outfit layers into temporary FrameBuffer with safety padding to prevent sprite bounding box clipping
+    int pad = 4;
+    Size paddedSrcSize = m_src.size() + Size(pad * 2, pad * 2);
+    Rect paddedDest = Rect(m_dest.left() - pad, m_dest.top() - pad, m_dest.width() + pad * 2, m_dest.height() + pad * 2);
+
+    g_framebuffers.getTemporaryFrameBuffer()->resize(paddedSrcSize);
+    g_framebuffers.getTemporaryFrameBuffer()->bind();
+    g_painter->clear(Color::alpha);
 
     Matrix4 mat4;
     for (int x = 0; x < 4; ++x) {
@@ -469,16 +471,11 @@ void DrawQueueItemOutfitWithShader::draw()
     shader->setMatrixColor(mat4);
     shader->setCenter(m_center);
     shader->bindMultiTextures();
-    if (useFramebuffer) {
-        g_painter->drawTexturedRect(Rect(0, 0, m_src.size()), m_texture, m_src);
-    } else {
-        g_painter->drawTexturedRect(m_dest, m_texture, m_src);
-    }
+
+    g_painter->drawTexturedRect(Rect(pad, pad, m_src.size()), m_texture, m_src);
     g_painter->resetShaderProgram();
 
-    if (useFramebuffer) {
-        g_framebuffers.getTemporaryFrameBuffer()->release();
-        g_painter->resetColor();
-        g_framebuffers.getTemporaryFrameBuffer()->draw(m_dest);
-    }
+    g_framebuffers.getTemporaryFrameBuffer()->release();
+    g_painter->resetColor();
+    g_framebuffers.getTemporaryFrameBuffer()->draw(paddedDest);
 }
